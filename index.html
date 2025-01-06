@@ -1,0 +1,187 @@
+<html>
+
+  <script>
+  // Configuration
+const config = {
+  mainToken: "7302023003:AAEzK4UK7Q0oCk_mRnP5_2quHukxoKMDxh4",
+  adminId: 1256293459,
+  channels: [-1001970623431, -1001776968938, -1002089432263, -1001861299347, -1002287109054],
+  emojis: ["❤️", "🕊", "❤️‍🔥", "🌚", "🍓", "😍", "💯", "💘", "🥰"],
+  additionalTokens: [
+    "8168273394:AAEHd4qVo9LKKEUT5fzo2j2saj3dLI1uPf8",
+    "8028695820:AAG2Ws2YhjP23MveZNQnKPdfxb-UJqCkKsU",
+    "7777544420:AAGFKPF9mU2fyrIj7LQ2PueaNsiysT6LgQ0",
+    "7613328433:AAFF1bXjVSJBiePFURbv6z3g4OpAlQXD7to",
+    "7629941514:AAHY1LMrk3SpIspp-wQmYHyDBhZmkK80WqM",
+    "7065680153:AAGfGEUDzVnewEAoD8MbwHbydmbrrwrguG4",
+    "7292398904:AAFM-B0KxG2-ylO2I0syOjxMgVVUlyvqvdw",
+    "7601459016:AAEct-sF56Oi1WzubLUUNPoqW-wwyqbqT6A",
+    "7788714010:AAFBp5B0RJx6n08otIDaFaMhF-PpW2qXE6A",
+    "6068019504:AAEtAqGOBE72g4a6jGRAp3bcgfS0L1_kUvs",
+    "8158979227:AAGNBoWj2K5bUaX1lxg0NhYkmbuzRqRLMDU",
+    "6183180693:AAFp3ZXFZBa2Uta00NjWYs0ubLZVbxdlouo",
+    "7759306849:AAFp1Se-359y59mzupEp_a9zjTg-KdF_24s",
+    "7892420707:AAExq_pohg5juWA1TAR0L8pbMZa65hAeiUI"
+  ]
+};
+
+// Helper Functions
+const getRandomEmoji = (emojis) => {
+  return emojis[Math.floor(Math.random() * emojis.length)];
+};
+
+// Telegram API Functions
+class TelegramBot {
+  constructor(token) {
+    this.token = token;
+    this.baseUrl = `https://api.telegram.org/bot${token}`;
+    this.offset = 0;
+  }
+
+  async makeRequest(method, data = {}) {
+    try {
+      const response = await fetch(`${this.baseUrl}/${method}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+      return await response.json();
+    } catch (error) {
+      console.error(`Error in ${method}:`, error);
+      return null;
+    }
+  }
+
+  async getBotInfo() {
+    return this.makeRequest('getMe');
+  }
+
+  async sendMessage(chatId, text, parseMode = "Markdown", replyMarkup = null) {
+    return this.makeRequest('sendMessage', {
+      chat_id: chatId,
+      text,
+      parse_mode: parseMode,
+      reply_markup: replyMarkup
+    });
+  }
+
+  async setMessageReaction(chatId, messageId, emoji) {
+    return this.makeRequest('setMessageReaction', {
+      chat_id: chatId,
+      message_id: messageId,
+      reaction: JSON.stringify([{ type: 'emoji', emoji }])
+    });
+  }
+
+  async getUpdates() {
+    const updates = await this.makeRequest('getUpdates', {
+      offset: this.offset,
+      timeout: 30
+    });
+    
+    if (updates?.result?.length > 0) {
+      this.offset = updates.result[updates.result.length - 1].update_id + 1;
+    }
+    
+    return updates?.result || [];
+  }
+}
+
+// Message Handler
+class MessageHandler {
+  constructor(config) {
+    this.config = config;
+    this.mainBot = new TelegramBot(config.mainToken);
+    this.additionalBots = config.additionalTokens.map(token => new TelegramBot(token));
+  }
+
+  async handleStartCommand(chatId, name) {
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: 'إذاعة القرآن الكريم 🎧', url: 'https://t.me/Eria_vip' }],
+        [{ text: 'الفردوس غايتنا🪴🤍', url: 'https://t.me/az90arw' }],
+        [{ text: 'المطور 🧑🏻‍💻', url: 'https://t.me/Elqary' }]
+      ]
+    };
+
+    const message = `السلام على من اتَّبع الهدى 👋
+♡ اهلا بك 〔 _ ${name} _ 〕 ✨️.
+
+♡ فضلاً انضم لأسرتنا وشاركها مع احبَّائك ليعم الخير :
+
+● [__إذاعة القرآن الكريم 🎧__](https://t.me/Eria_vip) .
+
+○ [__الفردوس غايتنا🪴🤍__](https://t.me/az90arw) .`;
+
+    await this.mainBot.sendMessage(chatId, message, "Markdown", keyboard);
+  }
+
+  async handleChannelMessage(chatId, messageId) {
+    if (!this.config.channels.includes(chatId)) return;
+
+    // Add reactions from all bots with delay
+    for (const bot of [this.mainBot, ...this.additionalBots]) {
+      const emoji = getRandomEmoji(this.config.emojis);
+      await bot.setMessageReaction(chatId, messageId, emoji);
+      await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
+    }
+  }
+
+  async handleMessage(message) {
+    const chatId = message.chat.id;
+    const messageId = message.message_id;
+    const text = message.text || '';
+    const name = message.from?.first_name || '';
+
+    if (text === '/start') {
+      await this.handleStartCommand(chatId, name);
+    } else {
+      await this.handleChannelMessage(chatId, messageId);
+    }
+  }
+}
+
+// Main Bot Loop
+class BotApplication {
+  constructor(config) {
+    this.messageHandler = new MessageHandler(config);
+    this.isRunning = false;
+  }
+
+  async start() {
+    this.isRunning = true;
+    await this.poll();
+  }
+
+  stop() {
+    this.isRunning = false;
+  }
+
+  async poll() {
+    while (this.isRunning) {
+      try {
+        const updates = await this.messageHandler.mainBot.getUpdates();
+        
+        for (const update of updates) {
+          if (update.message) {
+            await this.messageHandler.handleMessage(update.message);
+          }
+          if (update.channel_post) {
+            await this.messageHandler.handleMessage(update.channel_post);
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s on error
+      }
+    }
+  }
+}
+
+// Start the bot
+const bot = new BotApplication(config);
+bot.start().catch(console.error);
+  </script>
+</html>
